@@ -1,172 +1,204 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { motion, useScroll, useTransform, useSpring } from "framer-motion";
+import React, { useEffect, useRef, useState } from "react";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import Lenis from 'lenis';
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { 
-  ShoppingBag, Search, Shield, Zap, Globe, ChevronRight, Menu, X, Cpu, Activity
+  Hexagon, ShoppingCart, X, ArrowUpRight, Cpu, Activity, Zap, Shield, Globe, Layers, CheckCircle2 
 } from "lucide-react";
 
-export default function TitanEliteExperience() {
-  const { scrollY } = useScroll();
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+// --- 1. ZUSTAND STORE ---
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+  img: string;
+  tag?: string;
+}
 
-  // Ndjekja e mouse-it për efektin "Glow"
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
+interface CartStore {
+  items: Product[];
+  isCartOpen: boolean;
+  notification: string | null;
+  addItem: (item: Product) => void;
+  removeItem: (id: number) => void;
+  toggleCart: () => void;
+  clearNotification: () => void;
+  getTotal: () => number;
+}
 
-  // Animacionet e Scroll-it
-  const scale = useTransform(scrollY, [0, 500], [1, 1.4]);
-  const yText = useTransform(scrollY, [0, 500], [0, -100]);
-  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
-  const coreGlow = useTransform(scrollY, [0, 500], ["0px 0px 20px #00FFFF", "0px 0px 180px #00FFFF"]);
+const useCartStore = create<CartStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      isCartOpen: false,
+      notification: null,
+      addItem: (item) => {
+        set((state) => ({ 
+          items: [...state.items, item],
+          notification: `${item.name} u shtua në shportë!`
+        }));
+        setTimeout(() => set({ notification: null }), 3000);
+      },
+      removeItem: (id) => set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
+      toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),
+      clearNotification: () => set({ notification: null }),
+      getTotal: () => get().items.reduce((acc, item) => acc + item.price, 0),
+    }),
+    { name: 'titan-storage' }
+  )
+);
+
+// --- 2. DATA ---
+const PRODUCTS: Product[] = [
+  { id: 1, name: "Titan 16 Pro", price: 1199, img: "https://images.unsplash.com/photo-1616348436168-de43ad0db179?q=80&w=1000", tag: "Most Popular" },
+  { id: 2, name: "Titan 16 Ultra", price: 1499, img: "https://images.unsplash.com/photo-1592890288564-76628a30a657?q=80&w=1000", tag: "Elite Performance" },
+  { id: 3, name: "Titan 16 Fold", price: 1999, img: "https://images.unsplash.com/photo-1556656793-062ff98782ee?q=80&w=1000", tag: "Next-Gen" },
+  { id: 4, name: "Titan 16 Air", price: 999, img: "https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?q=80&w=1000", tag: "Lightweight" }
+];
+
+// --- 3. UI COMPONENTS ---
+const CartSidebar = () => {
+  const { items, isCartOpen, toggleCart, removeItem, getTotal } = useCartStore();
+  const subtotal = getTotal();
+  const total = subtotal + (subtotal * 0.2);
 
   return (
-    <main className="bg-[#050505] text-white font-sans selection:bg-[#00FFFF] selection:text-black overflow-x-hidden">
-      
-      {/* 1. Drita që ndjek mouse-in (Cursor Glow) */}
-      <div 
-        className="pointer-events-none fixed inset-0 z-[400] transition-opacity duration-300 opacity-40"
-        style={{
-          background: `radial-gradient(600px at ${mousePos.x}px ${mousePos.y}px, rgba(0, 255, 255, 0.08), transparent 80%)`
-        }}
-      />
+    <AnimatePresence>
+      {isCartOpen && (
+        <>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={toggleCart} className="fixed inset-0 bg-black/80 backdrop-blur-md z-[2000]" />
+          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="fixed right-0 top-0 h-full w-full md:w-[450px] bg-[#050505] border-l border-white/5 z-[2001] p-10 flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center mb-12">
+              <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Shporta</h3>
+              <button onClick={toggleCart} className="text-white hover:rotate-90 transition-transform"><X size={24} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-6">
+              {items.map((item, idx) => (
+                <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} key={`${item.id}-${idx}`} className="flex gap-4 p-4 bg-white/5 rounded-3xl border border-white/5">
+                  <img src={item.img} className="w-16 h-16 object-cover rounded-xl" alt="" />
+                  <div className="flex-1 text-xs uppercase font-bold italic text-white">{item.name}<p className="text-[#00FFFF] mt-1 italic font-mono">{item.price}€</p></div>
+                  <button onClick={() => removeItem(item.id)} className="text-zinc-500 hover:text-red-500"><X size={16} /></button>
+                </motion.div>
+              ))}
+            </div>
+            <div className="mt-10 pt-10 border-t border-white/10">
+              <div className="flex justify-between text-2xl font-black italic text-white"><span>TOTAL</span><span className="text-[#00FFFF]">{total.toFixed(2)}€</span></div>
+              <button className="w-full bg-[#00FFFF] text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] mt-6">Vazhdo te Pagesa</button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
 
-      {/* 2. NAV */}
-      <nav className="fixed top-0 w-full z-[300] mix-blend-difference px-8 py-6 flex justify-between items-center">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xl font-black tracking-[-0.1em]">TITAN</motion.div>
-        <div className="hidden md:flex gap-12 text-[10px] uppercase tracking-[0.4em] font-light">
-          {["Vision", "Systems", "Archive", "Access"].map((item) => (
-            <a key={item} href="#" className="hover:text-[#00FFFF] transition-colors">{item}</a>
-          ))}
-        </div>
-        <div className="flex gap-6 items-center">
-          <Search size={18} strokeWidth={1.5} />
-          <ShoppingBag size={18} strokeWidth={1.5} />
+// --- 4. MAIN PAGE ---
+export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  const { addItem, toggleCart, items, notification } = useCartStore();
+  const { scrollYProgress } = useScroll();
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 1.2]);
+
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      gsap.registerPlugin(ScrollTrigger);
+      const lenis = new Lenis({ lerp: 0.08, duration: 1.2 });
+      function raf(time: number) { lenis.raf(time); requestAnimationFrame(raf); }
+      requestAnimationFrame(raf);
+
+      gsap.from(".spec-box", {
+        scrollTrigger: { trigger: ".specs-section", start: "top 70%" },
+        y: 60, opacity: 0, stagger: 0.15, duration: 1, ease: "power4.out"
+      });
+
+      return () => lenis.destroy();
+    }
+  }, []);
+
+  if (!mounted) return <div className="bg-black min-h-screen" />;
+
+  return (
+    <main className="bg-[#020202] text-white selection:bg-[#00FFFF] selection:text-black">
+      <CartSidebar />
+      
+      {/* NOTIFICATION POPUP */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] bg-white text-black px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(0,255,255,0.3)]">
+            <CheckCircle2 size={18} className="text-green-600" />
+            <span className="text-[10px] font-black uppercase tracking-widest">{notification}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <nav className="fixed top-0 w-full z-[1000] p-8 mix-blend-difference">
+        <div className="max-w-[1800px] mx-auto flex justify-between items-center font-black italic uppercase tracking-tighter">
+          <div className="flex items-center gap-3 text-xl"><Hexagon className="text-[#00FFFF]" fill="#00FFFF" size={24} /> TITAN</div>
+          <button onClick={toggleCart} className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition-all">
+            <ShoppingCart size={18} /> <span>{items.length}</span>
+          </button>
         </div>
       </nav>
 
-      {/* 3. HERO SECTION ME "PARALLAX TITAN" */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        
-        {/* Shkrimi Parallax */}
-        <motion.div style={{ scale, y: yText }} className="relative z-10 flex flex-col items-center">
-          <h1 className="text-[25vw] font-black tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-800 opacity-20 select-none">
-            TITAN
-          </h1>
+      {/* HERO SECTION */}
+      <section className="h-screen flex items-center justify-center relative overflow-hidden">
+        <motion.div style={{ opacity: heroOpacity, scale: heroScale }} className="text-center z-10">
+          <h1 className="text-[25vw] font-black tracking-[-0.08em] leading-none text-white italic">TITAN</h1>
         </motion.div>
-
-        {/* Bërthama e Energjisë me Tech Stats anash */}
-        <div className="absolute z-20 flex items-center justify-center">
-          {/* Stats Majtas */}
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 0.4, x: 0 }}
-            transition={{ delay: 1 }}
-            className="hidden lg:block absolute left-[-200px] text-[10px] font-mono text-[#00FFFF] space-y-2 uppercase"
-          >
-            <div className="flex items-center gap-2"><Cpu size={12}/> Core: Q-1 Alpha</div>
-            <div>Temp: 22.4°C Stable</div>
-            <div>Sync: Neural.Link</div>
-          </motion.div>
-
-          <motion.div 
-            style={{ boxShadow: coreGlow }}
-            animate={{ scale: [1, 1.05, 1], rotate: 360 }}
-            transition={{ rotate: { duration: 25, repeat: Infinity, ease: "linear" }, scale: { duration: 4, repeat: Infinity } }}
-            className="w-40 h-40 md:w-72 md:h-72 border border-[#00FFFF]/30 rounded-full flex items-center justify-center backdrop-blur-sm"
-          >
-            <div className="w-[85%] h-[85%] border border-[#00FFFF]/10 rounded-full animate-ping opacity-20" />
-            <div className="absolute w-[1px] h-[150%] bg-gradient-to-t from-transparent via-[#00FFFF]/40 to-transparent rotate-45" />
-          </motion.div>
-
-          {/* Stats Djathtas */}
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 0.4, x: 0 }}
-            transition={{ delay: 1 }}
-            className="hidden lg:block absolute right-[-200px] text-[10px] font-mono text-[#00FFFF] space-y-2 uppercase text-right"
-          >
-            <div className="flex items-center justify-end gap-2">Protocol: 0.8 <Activity size={12}/></div>
-            <div>Security: Active</div>
-            <div>Location: Tirana, AL</div>
-          </motion.div>
-        </div>
-
-        <motion.div style={{ opacity }} className="absolute bottom-20 z-30 text-center">
-          <p className="text-[#00FFFF] text-[10px] uppercase tracking-[0.6em] mb-4 animate-pulse">Scanning environment...</p>
-          <h2 className="text-2xl font-extralight tracking-[0.8em] uppercase text-zinc-400">Quantum Era</h2>
-        </motion.div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black" />
       </section>
 
-      {/* 4. EXPERIENTIAL GRID (Mbetet e njëjtë por me hover efekte të shtuara) */}
-      <section className="px-4 py-4 grid grid-cols-1 md:grid-cols-12 gap-4 h-auto md:h-screen mb-4">
-        <div className="md:col-span-8 bg-zinc-950 border border-white/5 relative group overflow-hidden h-[60vh] md:h-full">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1635776062127-d379bfcba9f8?q=80&w=2000')] bg-cover bg-center opacity-20 grayscale group-hover:scale-110 transition-all duration-[2s]" />
-          <div className="relative z-10 p-12 h-full flex flex-col justify-end">
-            <span className="text-[#00FFFF] font-mono text-xs mb-4 tracking-widest opacity-0 group-hover:opacity-100 transition-opacity underline">DEVICE_SPECS: 01</span>
-            <h3 className="text-5xl font-bold tracking-tighter max-w-md uppercase leading-none">Grade 5<br/>Titanium</h3>
+      {/* NEW: SPECS SECTION (HYPER-TECH) */}
+      <section className="specs-section py-40 px-10 max-w-[1800px] mx-auto overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="spec-box bg-zinc-950 border border-white/5 p-12 rounded-[4rem] group hover:border-[#00FFFF]/40 transition-all">
+            <Cpu size={40} className="text-[#00FFFF] mb-10 group-hover:scale-110 transition-transform" />
+            <h3 className="text-5xl font-black italic tracking-tighter mb-4">A20 BIONIC</h3>
+            <p className="text-zinc-500 text-sm font-medium tracking-wide">Procesori më i shpejtë në planet. Arkitekturë 2nm për performancë ekstreme.</p>
           </div>
-        </div>
-
-        <div className="md:col-span-4 bg-[#00FFFF] text-black p-12 flex flex-col justify-between hover:bg-white transition-colors duration-500">
-          <div className="space-y-6">
+          <div className="spec-box bg-[#00FFFF] text-black p-12 rounded-[4rem] flex flex-col justify-between">
             <Zap size={40} fill="black" />
-            <h3 className="text-5xl font-black leading-none uppercase italic tracking-tighter">Ultra<br/>Charge</h3>
+            <div className="mt-20">
+              <h3 className="text-5xl font-black italic tracking-tighter">10 MIN</h3>
+              <p className="font-bold uppercase tracking-widest text-[10px]">Për 100% Karikim</p>
+            </div>
           </div>
-          <button className="w-full py-4 border-b-2 border-black flex justify-between items-center font-black uppercase tracking-widest text-xs">
-            Reserve Yours <ChevronRight size={20} />
-          </button>
-        </div>
-
-        <div className="md:col-span-4 bg-zinc-900 border border-white/5 p-12 group hover:bg-zinc-800 transition-colors">
-          <Globe className="mb-8 opacity-50 group-hover:text-[#00FFFF] group-hover:opacity-100 transition-all" />
-          <h4 className="text-xl font-bold mb-4 uppercase tracking-tighter">Global Neural Net</h4>
-          <p className="text-zinc-500 text-sm leading-relaxed">Sistemi i parë operativ që mëson dhe përshtatet me ndërgjegjen tuaj në kohë reale.</p>
-        </div>
-
-        <div className="md:col-span-8 bg-white text-black p-12 flex items-center justify-between group cursor-pointer overflow-hidden relative">
-          <h3 className="text-6xl font-black tracking-tighter uppercase relative z-10 group-hover:skew-x-6 transition-transform">Store Alpha</h3>
-          <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center text-white -rotate-45 group-hover:rotate-0 transition-all duration-500 relative z-10">
-            <ChevronRight size={44} />
+          <div className="spec-box bg-zinc-950 border border-white/5 p-12 rounded-[4rem] group hover:border-blue-500/40 transition-all">
+            <Shield size={40} className="text-blue-500 mb-10 group-hover:rotate-12 transition-transform" />
+            <h3 className="text-5xl font-black italic tracking-tighter mb-4">TITANIUM</h3>
+            <p className="text-zinc-500 text-sm font-medium tracking-wide">I pathyeshëm. I ndërtuar me materialet e industrisë hapsinore.</p>
           </div>
-          <div className="absolute bottom-0 left-0 w-0 h-1 bg-black group-hover:w-full transition-all duration-700" />
         </div>
       </section>
 
-      {/* 5. FOOTER */}
-      <footer className="py-20 px-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-start gap-12 bg-black">
-        <div className="space-y-4">
-          <div className="text-2xl font-black tracking-tighter">TITAN<span className="text-[#00FFFF]">.</span></div>
-          <p className="max-w-xs text-zinc-600 text-[10px] uppercase tracking-widest leading-loose">
-            Engineering the impossible from Tiranë, AL. All systems active.
-          </p>
-        </div>
-        
-        <div className="flex gap-32">
-          <div className="space-y-6">
-            <h5 className="text-[10px] uppercase tracking-[0.4em] text-zinc-500">Navigation</h5>
-            <ul className="text-xs space-y-3 font-bold uppercase tracking-widest">
-              <li className="hover:text-[#00FFFF] cursor-pointer">Specs</li>
-              <li className="hover:text-[#00FFFF] cursor-pointer">Labs</li>
-            </ul>
+      {/* PRODUCTS GRID */}
+      <section className="py-40 px-10 max-w-[1800px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {PRODUCTS.map((p) => (
+          <div key={p.id} className="group bg-zinc-900/20 border border-white/5 rounded-[3rem] p-8 hover:bg-zinc-900/40 transition-all">
+            <img src={p.img} className="w-full h-80 object-cover rounded-3xl mb-8 grayscale group-hover:grayscale-0 transition-all duration-700" alt="" />
+            <h3 className="text-3xl font-black italic uppercase mb-2 tracking-tighter">{p.name}</h3>
+            <div className="flex justify-between items-center mt-6">
+              <span className="text-xl font-mono text-[#00FFFF]">{p.price}€</span>
+              <button onClick={() => addItem(p)} className="bg-white text-black px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#00FFFF] transition-all">Shto</button>
+            </div>
           </div>
-          <div className="space-y-6">
-            <h5 className="text-[10px] uppercase tracking-[0.4em] text-zinc-500">Legal</h5>
-            <ul className="text-xs space-y-3 font-bold uppercase tracking-widest">
-              <li className="hover:text-[#00FFFF] cursor-pointer">Security</li>
-              <li className="hover:text-[#00FFFF] cursor-pointer">Privacy</li>
-            </ul>
-          </div>
-        </div>
-      </footer>
+        ))}
+      </section>
 
-      {/* Noise Effect Overlay */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] contrast-150 grayscale" />
+      {/* FOOTER */}
+      <footer className="py-20 text-center border-t border-white/5">
+        <div className="flex justify-center gap-10 mb-10 opacity-30 italic font-black uppercase text-[10px] tracking-[0.5em]">
+          <span>Instagram</span> / <span>Twitter</span> / <span>Apple Business</span>
+        </div>
+        <p className="text-[9px] font-mono text-zinc-600 tracking-[1em]">TITAN Q-LABS // 2026</p>
+      </footer>
     </main>
   );
 }
